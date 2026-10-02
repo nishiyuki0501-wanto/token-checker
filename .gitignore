@@ -8,6 +8,7 @@ DerivedData/
 TokenChecker.app/
 にゃんこのスタミナ.app/
 *.zip
+*.dmg
 *.sha256
 
 # Local docs / simulation notes
