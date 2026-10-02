@@ -18,5 +18,9 @@ let package = Package(
                 ])
             ]
         ),
+        .executableTarget(
+            name: "PuyoDrop",
+            path: "Sources/PuyoDrop"
+        ),
     ]
 )

@@ -1,4 +1,4 @@
-# Token Checker
+# にゃんこのスタミナ
 
 macOS のメニューバーに Claude Code と Codex の使用率を常時表示する macOS アプリケーション。
 
@@ -31,10 +31,10 @@ Claude Code と Codex のいずれかが欠けていても、もう一方は動�
 
 ビルド時に Apple Development の署名 identity が見つからない場合は ad-hoc 署名が自動的に使われる。自分でビルドした `.app` はそのまま起動できる。
 
-インストール後は Finder の「アプリケーション」から `TokenChecker` を開くか、ターミナルから以下を実行して起動する。
+インストール後は Finder の「アプリケーション」から `にゃんこのスタミナ` を開くか、ターミナルから以下を実行して起動する。
 
 ```bash
-open /Applications/TokenChecker.app
+open /Applications/にゃんこのスタミナ.app
 ```
 
 
@@ -59,7 +59,7 @@ codex login
 ## データ取得経路
 
 - **Claude**: `/usr/bin/security` 経由で Keychain (`Claude Code-credentials`) から OAuth アクセストークンを取得し、`https://api.anthropic.com/api/oauth/usage` に対して `anthropic-beta: oauth-2025-04-20` ヘッダー付きで GET する。
-- **Codex**: `/opt/homebrew/bin/codex app-server` を子プロセスとして起動し、行区切り JSON-RPC 経由で `account/rateLimits/read` を呼ぶ。
+- **Codex**: `codex app-server` を子プロセスとして起動し、行区切り JSON-RPC 経由で `account/rateLimits/read` を呼ぶ。CLI は Homebrew の標準パスに加えて `~/.npm-global/bin` などの一般的な npm/global installer の配置先から探索する。
 
 
 ## アンインストール
@@ -88,7 +88,7 @@ UI のデザインは [s-age/ccmeter](https://github.com/s-age/ccmeter)（MIT Li
 
 <br>
 
-# Token Checker
+# にゃんこのスタミナ
 
 A macOS menu bar application that displays Claude Code and Codex usage in real time.
 
@@ -117,10 +117,10 @@ Clone this repository and build on your own machine.
 
 If no Apple Development signing identity is found, ad-hoc signing is used automatically. A `.app` you built yourself can be launched directly.
 
-After installation, open `TokenChecker` from Finder's Applications folder, or run:
+After installation, open `にゃんこのスタミナ` from Finder's Applications folder, or run:
 
 ```bash
-open /Applications/TokenChecker.app
+open /Applications/にゃんこのスタミナ.app
 ```
 
 ## Usage
@@ -139,7 +139,7 @@ The popover (opened by clicking the menu bar item) shows 5-hour and weekly windo
 ## Data Sources
 
 - **Claude**: retrieves the OAuth access token from Keychain (`Claude Code-credentials`) via `/usr/bin/security`, then issues a GET request to `https://api.anthropic.com/api/oauth/usage` with the `anthropic-beta: oauth-2025-04-20` header.
-- **Codex**: spawns `/opt/homebrew/bin/codex app-server` as a subprocess and calls `account/rateLimits/read` via line-delimited JSON-RPC.
+- **Codex**: spawns `codex app-server` as a subprocess and calls `account/rateLimits/read` via line-delimited JSON-RPC. The app searches common install locations, including Homebrew paths and npm/global installer paths such as `~/.npm-global/bin`.
 
 ## Uninstall
 

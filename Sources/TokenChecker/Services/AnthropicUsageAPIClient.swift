@@ -66,8 +66,17 @@ struct AnthropicUsageAPIClient: Sendable {
 /// Bearer トークンが攻撃者ホストに漏れる経路を塞ぐ。`willPerformHTTPRedirection` で
 /// `completionHandler(nil)` を返すと URLSession は redirect を打ち切り、呼び出し側へ
 /// `URLError.cancelled` を投げる（このアプリではネットワークエラーとして扱う）。
-private final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+/// Antigravity / Cursor のクライアントも同じ理由でこれを使う。
+final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     static let shared = NoRedirectDelegate()
+
+    /// トークンを載せるリクエスト用の、リダイレクト不許可 ephemeral セッション。
+    static func makeSession() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 15
+        return URLSession(configuration: config, delegate: shared, delegateQueue: nil)
+    }
 
     func urlSession(
         _ session: URLSession,

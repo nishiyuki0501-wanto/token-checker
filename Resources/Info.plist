@@ -6,9 +6,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.token-checker.app</string>
     <key>CFBundleName</key>
-    <string>TokenChecker</string>
+    <string>にゃんこのスタミナ</string>
     <key>CFBundleDisplayName</key>
-    <string>Token Checker</string>
+    <string>にゃんこのスタミナ</string>
     <key>CFBundleExecutable</key>
     <string>TokenChecker</string>
     <key>CFBundleIconFile</key>
@@ -26,6 +26,6 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>© 2026 Token Checker contributors</string>
+    <string>© 2026 にゃんこのスタミナ contributors</string>
 </dict>
 </plist>

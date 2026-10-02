@@ -8,9 +8,25 @@ enum DomainError: Error, Equatable, LocalizedError, Sendable {
     case codexCLINotFound
     case codexProcessExited
     case codexRPCError(message: String)
+    case geminiNotLoggedIn
+    case geminiClientNotFound
+    case geminiUnauthorized
+    case geminiHTTP(status: Int)
+    case cursorNotLoggedIn
+    case cursorTokenExpired
+    case cursorHTTP(status: Int)
     case decoding(String)
     case timeout
     case network(String)
+
+    /// そもそもそのサービスを使っていない（未インストール・未ログイン）ことを示すエラー。
+    /// メニューバーではこの場合に項目ごと隠す。
+    var isNotConfigured: Bool {
+        switch self {
+        case .geminiNotLoggedIn, .geminiClientNotFound, .cursorNotLoggedIn: return true
+        default: return false
+        }
+    }
 
     var errorDescription: String? {
         switch self {
@@ -32,6 +48,20 @@ enum DomainError: Error, Equatable, LocalizedError, Sendable {
             return "codex app-server が終了しました。再起動を試みます。"
         case .codexRPCError(let message):
             return "Codex RPC エラー: \(message)"
+        case .geminiNotLoggedIn:
+            return "Antigravity のログイン情報が見つかりません。ターミナルで `agy` を起動してログインしてください。"
+        case .geminiClientNotFound:
+            return "Antigravity CLI (agy) が見つかりません。トークン更新に必要です。"
+        case .geminiUnauthorized:
+            return "Antigravity の認証が切れています。`agy` を起動して再ログインしてください。"
+        case .geminiHTTP(let status):
+            return "Antigravity API エラー (status \(status))"
+        case .cursorNotLoggedIn:
+            return "Cursor のログイン情報が見つかりません。Cursor を起動してログインしてください。"
+        case .cursorTokenExpired:
+            return "Cursor のトークンが期限切れです。Cursor を起動すると自動で更新されます。"
+        case .cursorHTTP(let status):
+            return "Cursor API エラー (status \(status))"
         case .decoding(let detail):
             return "レスポンスのデコードに失敗: \(detail)"
         case .timeout:

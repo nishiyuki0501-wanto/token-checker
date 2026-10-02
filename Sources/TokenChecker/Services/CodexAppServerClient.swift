@@ -19,14 +19,10 @@ actor CodexAppServerClient {
     private var lineBuffer = JSONRPCLineBuffer()
 
     init(
-        candidates: [String] = [
-            "/opt/homebrew/bin/codex",
-            "/usr/local/bin/codex",
-            "/usr/bin/codex",
-        ],
+        candidates: [String]? = nil,
         requestTimeout: TimeInterval = 8
     ) {
-        self.candidates = candidates
+        self.candidates = candidates ?? Self.defaultCandidatePaths()
         self.requestTimeout = requestTimeout
     }
 
@@ -104,7 +100,8 @@ actor CodexAppServerClient {
     func readRateLimits() async throws -> CodexRateLimitsDTO {
         let envelope = try await request(method: "account/rateLimits/read", params: EmptyParams())
         guard let result = envelope.result else {
-            throw DomainError.codexRPCError(message: "missing result for account/rateLimits/read")
+            let errorMsg = envelope.error?.message ?? "missing result for account/rateLimits/read"
+            throw DomainError.codexRPCError(message: errorMsg)
         }
         do {
             return try result.decode(as: CodexRateLimitsDTO.self)
@@ -119,6 +116,29 @@ actor CodexAppServerClient {
         candidates
             .first { FileManager.default.isExecutableFile(atPath: $0) }
             .map { URL(fileURLWithPath: $0) }
+    }
+
+    /// GUI アプリは login shell の PATH を継承しないため、Homebrew 以外の一般的な
+    /// npm/global installer の配置先も明示的に見る。
+    private static func defaultCandidatePaths(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> [String] {
+        let home = environment["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory()
+        let fixedCandidates = [
+            "/opt/homebrew/bin/codex",
+            "/usr/local/bin/codex",
+            "/usr/bin/codex",
+            "\(home)/.npm-global/bin/codex",
+            "\(home)/.local/bin/codex",
+            "\(home)/.volta/bin/codex",
+            "\(home)/.asdf/shims/codex",
+        ]
+        let pathCandidates = (environment["PATH"] ?? "")
+            .split(separator: ":")
+            .map { "\($0)/codex" }
+
+        var seen = Set<String>()
+        return (fixedCandidates + pathCandidates).filter { seen.insert($0).inserted }
     }
 
     /// 子プロセス (`codex app-server`) に渡す環境変数を最小限の whitelist で構築する。
@@ -144,7 +164,17 @@ actor CodexAppServerClient {
 
         // PATH は固定セット + 親の PATH の安全な部分をマージ
         let basePathDirs = (base["PATH"] ?? "").split(separator: ":").map(String.init)
-        let extras = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+        let home = base["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory()
+        let extras = [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            "\(home)/.npm-global/bin",
+            "\(home)/.local/bin",
+            "\(home)/.volta/bin",
+            "\(home)/.asdf/shims",
+        ]
         var seen = Set<String>()
         let merged = (extras + basePathDirs).filter { seen.insert($0).inserted }.joined(separator: ":")
         env["PATH"] = merged
@@ -304,6 +334,7 @@ struct InitializeParams: Encodable, Sendable {
 struct CodexRateLimitsDTO: Decodable, Sendable {
     let rateLimits: RateLimitSnapshot?
     let rateLimitsByLimitId: [String: RateLimitSnapshot]?
+    let accountId: String?
 
     struct RateLimitSnapshot: Decodable, Sendable {
         let limitId: String?
@@ -320,34 +351,63 @@ struct CodexRateLimitsDTO: Decodable, Sendable {
 }
 
 extension CodexRateLimitsDTO {
-    /// 5h (300 分) ウィンドウを抽出。
+    /// アカウントのプラン種別（"plus", "pro" など）。
+    var planType: String? {
+        rateLimits?.planType ?? rateLimitsByLimitId?["codex"]?.planType
+    }
+
+    /// 5h (300 分前後) ウィンドウを抽出。
+    /// Plusプランなどでは primary に 5時間リミット（300分）が設定される。Proプランには存在しない。
     func fiveHourRateLimit() -> RateLimit? {
-        window(forDurationMins: 300).flatMap(Self.toRateLimit)
+        // まず厳密に 300分（5時間）を探す
+        if let window = window(forDurationMins: 300) {
+            return Self.toRateLimit(window)
+        }
+        // フォールバック: 12時間（720分）以下かつ週次でない短期ウィンドウを採用
+        if let shortWindow = allWindows().first(where: {
+            guard let mins = $0.windowDurationMins else { return false }
+            return mins > 0 && mins <= 720 && mins != 10080
+        }) {
+            return Self.toRateLimit(shortWindow)
+        }
+        return nil
     }
 
-    /// 週次 (10080 分) ウィンドウを抽出。
+    /// 週次 (10080 分前後) ウィンドウを抽出。
+    /// Proプランでは週次のみ、Plusプランでは secondary などに設定される。
     func weeklyRateLimit() -> RateLimit? {
-        window(forDurationMins: 10080).flatMap(Self.toRateLimit)
+        // まず厳密に 10080分（7日）を探す
+        if let window = window(forDurationMins: 10080) {
+            return Self.toRateLimit(window)
+        }
+        // フォールバック: 24時間（1440分）以上の長期ウィンドウを採用
+        if let longWindow = allWindows().first(where: {
+            guard let mins = $0.windowDurationMins else { return false }
+            return mins >= 1440
+        }) {
+            return Self.toRateLimit(longWindow)
+        }
+        return nil
     }
 
-    /// 指定分数のウィンドウを探す。primary/secondary 両方を見る。
-    ///
-    /// 優先順位:
-    ///   1. トップレベル `rateLimits` … 現アカウントの直接スナップショット
-    ///   2. `rateLimitsByLimitId` … 複数 limitId が同居しうる。Dictionary の
-    ///      iteration 順は Hasher seed 依存で起動ごとに変動するため、
-    ///      key ソートで安定化してから走査する。
-    private func window(forDurationMins minutes: Int64) -> Window? {
+    /// 利用可能な全ウィンドウを優先順（rateLimits → rateLimitsByLimitId）で取得。
+    private func allWindows() -> [Window] {
+        var windows: [Window] = []
         if let snap = rateLimits {
-            if let p = snap.primary,   p.windowDurationMins == minutes { return p }
-            if let s = snap.secondary, s.windowDurationMins == minutes { return s }
+            if let p = snap.primary { windows.append(p) }
+            if let s = snap.secondary { windows.append(s) }
         }
         let sortedSnapshots = (rateLimitsByLimitId ?? [:]).sorted(by: { $0.key < $1.key })
         for (_, snap) in sortedSnapshots {
-            if let p = snap.primary,   p.windowDurationMins == minutes { return p }
-            if let s = snap.secondary, s.windowDurationMins == minutes { return s }
+            if let p = snap.primary { windows.append(p) }
+            if let s = snap.secondary { windows.append(s) }
         }
-        return nil
+        return windows
+    }
+
+    /// 指定分数のウィンドウを探す。primary/secondary 両方を見る。
+    private func window(forDurationMins minutes: Int64) -> Window? {
+        allWindows().first { $0.windowDurationMins == minutes }
     }
 
     /// `usedPercent` または `resetsAt` が欠落しているウィンドウは「データなし」として nil 返却。

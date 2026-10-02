@@ -2,10 +2,10 @@
 # =============================================================================
 # Scripts/build.sh
 #
-# token-checker を release ビルドして TokenChecker.app を組み立てる．
+# token-checker を release ビルドして にゃんこのスタミナ.app を組み立てる．
 #
 # 使い方:
-#   ./Scripts/build.sh                  # ./TokenChecker.app を作成
+#   ./Scripts/build.sh                  # ./にゃんこのスタミナ.app を作成
 #   ./Scripts/build.sh --install        # 上記＋ /Applications にコピー
 #   ./Scripts/build.sh --user-install   # 上記＋ ~/Applications にコピー
 #   ./Scripts/build.sh --clean          # 先にビルドキャッシュを掃除
@@ -15,7 +15,8 @@ set -euo pipefail
 
 PRODUCT="TokenChecker"
 BUILD_DIR=".build/release"
-APP_BUNDLE="${PRODUCT}.app"
+APP_BUNDLE="にゃんこのスタミナ.app"
+LEGACY_APP_BUNDLE="${PRODUCT}.app"
 CONTENTS="${APP_BUNDLE}/Contents"
 MACOS="${CONTENTS}/MacOS"
 RESOURCES="${CONTENTS}/Resources"
@@ -36,12 +37,12 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Build ${PRODUCT}.app from this SwiftPM project.
+Build ${APP_BUNDLE} from this SwiftPM project.
 
 Options:
   --clean          Clean .build/ before building
-  --install        Copy ${PRODUCT}.app to /Applications after building
-  --user-install   Copy ${PRODUCT}.app to ~/Applications after building
+  --install        Copy ${APP_BUNDLE} to /Applications after building
+  --user-install   Copy ${APP_BUNDLE} to ~/Applications after building
   --no-sign        Skip codesign (not recommended)
   -h, --help       Show this help
 EOF
@@ -85,6 +86,13 @@ if [[ ! -f Resources/AppIcon.icns ]]; then
     exit 1
 fi
 cp Resources/AppIcon.icns "${RESOURCES}/"
+if [[ -f Resources/LeapingCat.png ]]; then
+    cp Resources/LeapingCat.png "${RESOURCES}/"
+fi
+# メニューバー用の白抜きシルエット（LeapingCat.png の円の中の猫だけを切り出したもの）
+if [[ -f Resources/LeapingCatSilhouette.png ]]; then
+    cp Resources/LeapingCatSilhouette.png "${RESOURCES}/"
+fi
 
 # MIT 帰属表示の同梱: 本ソフトウェアおよび ccmeter (MIT) 由来部分のライセンス本文と
 # 著作権表示を配布バイナリ内に同梱する必要がある．
@@ -134,6 +142,7 @@ fi
 if ${DO_INSTALL}; then
     info "Installing to /Applications..."
     rm -rf "/Applications/${APP_BUNDLE}"
+    rm -rf "/Applications/${LEGACY_APP_BUNDLE}"
     cp -R "${APP_BUNDLE}" "/Applications/"
     info "Installed to /Applications/${APP_BUNDLE}"
 fi
